@@ -1,67 +1,55 @@
 import 'dart:convert';
+import 'package:eventshive/RegistrationPage.dart';
+import 'package:eventshive/events_page.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:eventshive/events_page.dart'; // Make sure this is the correct class name
 
-class RegistrationPage extends StatefulWidget {
+class LoginPage extends StatefulWidget {
   @override
-  _RegistrationPageState createState() => _RegistrationPageState();
+  _LoginPageState createState() => _LoginPageState();
 }
 
-class _RegistrationPageState extends State<RegistrationPage> {
-  final TextEditingController nameController = TextEditingController();
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
+  bool obscurePassword = true;
 
   final String backendBaseUrl = "http://10.53.1.81:3000";
 
-  Future<void> register() async {
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingSession();
+  }
+
+  Future<void> _checkExistingSession() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+    if (token != null && token.isNotEmpty) {
+      // Navigate to EventsPage if user already logged in
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomePage()),
+      );
+    }
+  }
+
+  Future<void> login() async {
     setState(() => isLoading = true);
 
-    final name = nameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("All fields are required")));
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("All fields are required")),
+      );
       setState(() => isLoading = false);
       return;
     }
 
-    try {
-      // Register API call
-      final response = await http.post(
-        Uri.parse('$backendBaseUrl/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({"name": name, "email": email, "password": password}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(data['message'] ?? "Registered successfully")));
-
-        // Auto-login after successful registration
-        await autoLogin(email, password);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? "Registration failed")),
-        );
-      }
-    } catch (e) {
-      print(e);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Server error")));
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> autoLogin(String email, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$backendBaseUrl/login'),
@@ -76,19 +64,25 @@ class _RegistrationPageState extends State<RegistrationPage> {
         await prefs.setString('auth_token', data['token']);
         await prefs.setString('user_email', data['user']['email']);
 
-        // Navigate to EventsPage
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("✅ Login successful!")));
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomePage()), // Make sure class name matches
+          MaterialPageRoute(builder: (_) => HomePage()),
         );
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Login failed after registration")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? "Login failed")),
+        );
       }
     } catch (e) {
-      print(e);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Server error")));
+      print("Login Error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Server error")),
+      );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -97,7 +91,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -107,7 +100,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
               ),
             ),
           ),
-          // Registration card
           Center(
             child: SingleChildScrollView(
               child: Card(
@@ -122,7 +114,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        "Create Account",
+                        "Login",
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -130,18 +122,32 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         ),
                       ),
                       SizedBox(height: 20),
-                      _buildTextField("Name", nameController),
+                      _buildTextField(
+                        "Email",
+                        emailController,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
                       SizedBox(height: 16),
-                      _buildTextField("Email", emailController,
-                          keyboardType: TextInputType.emailAddress),
-                      SizedBox(height: 16),
-                      _buildTextField("Password", passwordController,
-                          obscureText: true),
+                      _buildTextField(
+                        "Password",
+                        passwordController,
+                        obscureText: obscurePassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscurePassword = !obscurePassword;
+                            });
+                          },
+                        ),
+                      ),
                       SizedBox(height: 30),
                       isLoading
                           ? CircularProgressIndicator()
                           : GestureDetector(
-                              onTap: register,
+                              onTap: login,
                               child: Container(
                                 width: double.infinity,
                                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -160,7 +166,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
-                                  "Register",
+                                  "Login",
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 18,
@@ -172,14 +178,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text("Already have an account? ",
+                          Text("Don't have an account? ",
                               style: TextStyle(color: Colors.grey.shade700)),
                           GestureDetector(
                             onTap: () {
-                              Navigator.pop(context); // Go back to LoginPage
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => RegistrationPage()),
+                              );
                             },
                             child: Text(
-                              "Login",
+                              "Register",
                               style: TextStyle(
                                 color: Colors.deepPurple,
                                 fontWeight: FontWeight.bold,
@@ -200,8 +210,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildTextField(String label, TextEditingController controller,
-      {bool obscureText = false,
-      TextInputType keyboardType = TextInputType.text}) {
+      {bool obscureText = false, TextInputType keyboardType = TextInputType.text, Widget? suffixIcon}) {
     return TextField(
       controller: controller,
       obscureText: obscureText,
@@ -216,6 +225,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           borderSide: BorderSide.none,
         ),
         contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        suffixIcon: suffixIcon,
       ),
     );
   }

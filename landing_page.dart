@@ -1,4 +1,5 @@
-import 'package:eventshive/events_page.dart';
+import 'package:eventshive/Login_Page.dart';
+import 'package:eventshive/RegistrationPage.dart';
 import 'package:flutter/material.dart';
 
 class LandingPage extends StatelessWidget {
@@ -10,8 +11,8 @@ class LandingPage extends StatelessWidget {
           // Background Image
           Positioned.fill(
             child: Image.asset(
-              'assets/images/landing.jpg', // Path to your background image
-              fit: BoxFit.cover, // Makes the image cover the whole screen
+              'assets/images/landing.jpg', 
+              fit: BoxFit.cover,
             ),
           ),
           // Overlaying content (buttons, text)
@@ -19,9 +20,9 @@ class LandingPage extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo or Title
+                // Logo
                 Image.asset(
-                  'assets/images/logo1.png', // Your app logo
+                  'assets/images/logo1.png', 
                   height: 100,
                   width: 100,
                 ),
@@ -44,28 +45,30 @@ class LandingPage extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 40),
-                // Buttons
+                // Get Started Button
                 ElevatedButton(
                   onPressed: () {
-                    // Navigate to the HomePage when Get Started is tapped
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => HomePage()),
+                      MaterialPageRoute(builder: (context) => RegistrationPage()),
                     );
                   },
-
                   child: Text('Get Started'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent, // Button color
+                    backgroundColor: Colors.blueAccent,
                     padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                     textStyle: TextStyle(fontSize: 18),
                   ),
                 ),
                 SizedBox(height: 20),
+                // Login TextButton
                 TextButton(
                   onPressed: () {
-                    // Navigate to login page if needed
-                    Navigator.pushNamed(context, '/login');
+                    // Navigate directly to LoginPage
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => LoginPage()),
+                    );
                   },
                   child: Text(
                     'Already have an account? Login',
