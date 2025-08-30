@@ -1,6 +1,7 @@
 import 'package:eventshive/attendee_details.dart';
 import 'package:eventshive/event_creation.dart';
 import 'package:eventshive/event_detail_page.dart';
+import 'package:eventshive/landing_page.dart';
 import 'package:eventshive/ticket_booking.dart';
 import 'package:flutter/material.dart';
 import 'events_page.dart'; // Import your Events page
@@ -22,7 +23,7 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => RegisterPage(), // The Event List Page
+        '/': (context) => LandingPage(), // The Event List Page
         // You can add more routes for event details, registration, etc. later
       },
     );
