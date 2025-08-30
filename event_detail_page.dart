@@ -1,166 +1,160 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:carousel_slider/carousel_slider.dart';
+import 'package:http/http.dart' as http;
 
-class EventDetailPage extends StatelessWidget {
-  // Sample data (replace with actual data)
-  final eventData = {
-    'title': 'Live Music Festival',
-    'description':
-        'Experience live music, local food, and beverages. The 12th edition of our Live Musical Festival!',
-    'date': 'Aug 14, 1:30 PM - 5:30 PM',
-    'location': 'Silver Auditorium, Ahmedabad, Gujarat',
-    'organizer': 'Marc Demo',
-    'contact': 'Olympus@yourcompany.com',
-    'imageUrls': [
-      'https://your-image-url.com/image1.jpg',
-      'https://your-image-url.com/image2.jpg',
-      'https://your-image-url.com/image3.jpg',
-    ]
-  };
+class EventDetailPage extends StatefulWidget {
+  final String eventId;
+  EventDetailPage({required this.eventId});
+
+  @override
+  _EventDetailPageState createState() => _EventDetailPageState();
+}
+
+class _EventDetailPageState extends State<EventDetailPage> {
+  Map<String, dynamic>? event;
+  bool isLoading = true;
+
+  final String backendBaseUrl = "http://10.53.1.81:3000"; // same as HomePage
+
+  // Fetch single event by ID
+  Future<void> fetchEvent() async {
+    setState(() => isLoading = true);
+    try {
+      final response = await http.get(Uri.parse('$backendBaseUrl/events/${widget.eventId}'));
+
+      if (response.statusCode == 200) {
+        setState(() {
+          event = jsonDecode(response.body);
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load event')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not connect to server')),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchEvent();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(eventData['title'] as String)),
-      body: SingleChildScrollView( // Make the entire body scrollable
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Event Image Carousel
-            CarouselSlider(
-              options: CarouselOptions(
-                autoPlay: true,
-                enlargeCenterPage: true,
-                aspectRatio: 2.0,
-                viewportFraction: 0.9,
-              ),
-              items: (eventData['imageUrls'] as List<String>).map<Widget>((item) {
-                return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 5.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      item,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
+      appBar: AppBar(title: Text(event?['name'] ?? 'Event Details')),
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : event == null
+              ? Center(child: Text('Event not found'))
+              : SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Event image
+                      Image.network(
+                        event!['imageUrl'] ?? '',
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Image.asset('assets/images/placeholder.jpg', height: 200),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Event Name
+                      Text(
+                        event!['name'] ?? 'No Title',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+
+                      // Description
+                      Text(event!['description'] ?? 'No Description'),
+                      SizedBox(height: 8),
+
+                      // Location
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, color: Colors.red),
+                          SizedBox(width: 4),
+                          Text(event!['location'] ?? 'Unknown'),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+
+                      // Start & End Dates
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today, color: Colors.blue, size: 18),
+                          SizedBox(width: 4),
+                          Text("Start: ${event!['startDate'] ?? 'N/A'}"),
+                          SizedBox(width: 16),
+                          Text("End: ${event!['endDate'] ?? 'N/A'}"),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+
+                      // Registration Dates
+                      Text(
+                        "Registration: ${event!['registrationStart'] ?? 'N/A'} - ${event!['registrationEnd'] ?? 'N/A'}",
+                      ),
+                      SizedBox(height: 12),
+
+                      // Publish status
+                      Row(
+                        children: [
+                          Text(
+                            "Published: ",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Icon(
+                            event!['isPublished'] == true ? Icons.check_circle : Icons.cancel,
+                            color: event!['isPublished'] == true ? Colors.green : Colors.red,
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+
+                      // Tickets
+                      Text(
+                        "Tickets",
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      if (event!['tickets'] != null && event!['tickets'].isNotEmpty)
+                        Column(
+                          children: List.generate(event!['tickets'].length, (index) {
+                            final t = event!['tickets'][index];
+                            return Card(
+                              margin: EdgeInsets.symmetric(vertical: 4),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(t['type'] ?? 'Ticket'),
+                                    Text("\$${t['price'] ?? 0}"),
+                                    Text("Qty: ${t['quantity'] ?? 0}"),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        )
+                      else
+                        Text("No tickets available"),
+                    ],
                   ),
-                );
-              }).toList(),
-            ),
-            SizedBox(height: 20),
-
-            // Event Description (wrapped in Flexible widget to avoid overflow)
-            Flexible(
-              child: Text(
-                eventData['description'] as String,
-                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                overflow: TextOverflow.ellipsis, // Avoid long text overflow
-                maxLines: 4, // Limit text to 4 lines
-              ),
-            ),
-            SizedBox(height: 20),
-
-            // Event Date & Location
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Date & Time',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(eventData['date'] as String),
-                  ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Location',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(eventData['location'] as String),
-                  ],
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-
-            // Event Organizer
-            Text(
-              'Organizer: ${eventData['organizer'] as String}',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Contact: ${eventData['contact'] as String}',
-              style: TextStyle(color: Colors.blue),
-            ),
-            SizedBox(height: 20),
-
-            // Register Button (wrapped in Align widget to center)
-            Align(
-              alignment: Alignment.center,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Register functionality here
-                },
-                child: Text('Register'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue, // Button color
-                  padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                  textStyle: TextStyle(fontSize: 18),
-                ),
-              ),
-            ),
-            SizedBox(height: 20),
-
-            // Report Spam Button (also centered)
-            Align(
-              alignment: Alignment.center,
-              child: TextButton(
-                onPressed: () {
-                  // Report spam functionality here
-                },
-                child: Text(
-                  'Report Spam',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ),
-            SizedBox(height: 20),
-
-            // Social Media & Share (centered icons)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.share),
-                  onPressed: () {
-                    // Share event functionality
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.facebook),
-                  onPressed: () {
-                    // Facebook share functionality
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.facebook),
-                  onPressed: () {
-                    // Twitter share functionality
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

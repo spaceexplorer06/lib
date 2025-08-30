@@ -1,56 +1,91 @@
-require('dotenv').config();
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const { MongoClient } = require('mongodb');
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 
 const app = express();
+const PORT = 3000;
+
+// Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// MongoDB connection string
-const uri = process.env.MONGO_URI;
-let db;
+// ✅ MongoDB Atlas connection
+const MONGO_URI = "mongodb+srv://eventadmin:moinakdey17@cluster0.dtvoi.mongodb.net/eventhive?retryWrites=true&w=majority&appName=Cluster0";
 
-// Connect to MongoDB Atlas
-async function connectToDatabase() {
-  try {
-    console.log('Attempting to connect to MongoDB Atlas...');
-    const client = await MongoClient.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    db = client.db('eventhive'); // Corrected to lowercase 'eventhive'
-    console.log('Connected to MongoDB Atlas');
-    
-    // Start the server after DB is connected
-    app.listen(process.env.PORT || 3000, () => {
-      console.log(`Server running on http://localhost:${process.env.PORT || 3000}`);
-    });
-  } catch (err) {
-    console.error('Failed to connect to MongoDB:', err);
-    process.exit(1); // Exit if connection fails
-  }
-}
+mongoose
+  .connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB Atlas connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-connectToDatabase();
-
-// Root route: added to handle "Cannot GET /" error
-app.get('/', (req, res) => {
-  res.send('Welcome to EventHive API!');
+// Event Schema
+const eventSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: String,
+  location: String,
+  startDate: String,
+  endDate: String,
+  registrationStart: String,
+  registrationEnd: String,
+  isPublished: { type: Boolean, default: false },
+  tickets: [
+    {
+      type: { type: String },
+      price: Number,
+      quantity: Number,
+    },
+  ],
 });
 
-// Fetch events from the database
-app.get('/events', async (req, res) => {
-  if (!db) {
-    return res.status(503).send({ error: 'Database not connected yet' });
-  }
+const Event = mongoose.model("Event", eventSchema);
 
+// ✅ Route: Create Event
+app.post("/create-event", async (req, res) => {
   try {
-    const events = await db.collection('events').find().toArray();
-    res.status(200).json(events); // Return events as JSON
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    res.status(500).send({ error: 'Failed to fetch events' });
+    console.log("📩 Incoming Event Data:", req.body);
+
+    const event = new Event(req.body);
+    await event.save();
+
+    res.status(201).json({
+      success: true,
+      message: "✅ Event created successfully!",
+      event: event,
+    });
+  } catch (err) {
+    console.error("❌ Error creating event:", err.message);
+    res.status(400).json({ success: false, error: err.message });
   }
+});
+
+// ✅ Route: Get All Events
+app.get("/events", async (req, res) => {
+  try {
+    const events = await Event.find();
+    res.status(200).json(events);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+// ✅ Route: Get Single Event by ID
+app.get("/events/:id", async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ error: "Event not found" });
+
+    res.status(200).json(event);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch event" });
+  }
+});
+
+// Root route
+app.get("/", (req, res) => {
+  res.send("🎉 EventHive API is running fine!");
+});
+
+// ✅ Listen on 0.0.0.0 for LAN access
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
 });
