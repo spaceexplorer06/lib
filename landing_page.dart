@@ -1,3 +1,4 @@
+import 'package:eventshive/events_page.dart';
 import 'package:flutter/material.dart';
 
 class LandingPage extends StatelessWidget {
@@ -46,9 +47,13 @@ class LandingPage extends StatelessWidget {
                 // Buttons
                 ElevatedButton(
                   onPressed: () {
-                    // Navigate to the event creation page
-                    Navigator.pushNamed(context, '/create-event');
+                    // Navigate to the HomePage when Get Started is tapped
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => HomePage()),
+                    );
                   },
+
                   child: Text('Get Started'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent, // Button color

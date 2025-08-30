@@ -19,18 +19,59 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final TextEditingController _registrationStartController = TextEditingController();
   final TextEditingController _registrationEndController = TextEditingController();
 
-  // For tickets
-  final TextEditingController _standardPriceController = TextEditingController();
-  final TextEditingController _vipPriceController = TextEditingController();
-  final TextEditingController _standardTicketsController = TextEditingController();
-  final TextEditingController _vipTicketsController = TextEditingController();
-
-  // For questions (Name, Email, Gender)
-  final TextEditingController _question1Controller = TextEditingController();
-  final TextEditingController _question2Controller = TextEditingController();
+  // For dynamic tickets
+  final List<Map<String, TextEditingController>> _ticketControllers = [];
 
   bool _isPublished = false;
   bool _isUploadingPhotos = false;
+
+  // Add new ticket type
+  void _addTicketType() {
+    setState(() {
+      _ticketControllers.add({
+        'ticketType': TextEditingController(),
+        'ticketPrice': TextEditingController(),
+        'ticketQuantity': TextEditingController(),
+      });
+    });
+  }
+
+  // Function to show the date and time picker
+  Future<void> _selectDateTime(BuildContext context, TextEditingController controller) async {
+    DateTime selectedDate = DateTime.now();
+
+    // Show Date Picker
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+
+    if (pickedDate != null) {
+      selectedDate = pickedDate;
+
+      // Show Time Picker
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(selectedDate),
+      );
+
+      if (pickedTime != null) {
+        // Combine the selected date and time
+        final DateTime fullDateTime = DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+
+        // Format the date-time
+        controller.text = fullDateTime.toString(); // You can customize the format
+      }
+    }
+  }
 
   // Function to send event data to backend
   Future<void> createEvent() async {
@@ -44,15 +85,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
         'endDate': _endDateController.text,
         'registrationStart': _registrationStartController.text,
         'registrationEnd': _registrationEndController.text,
-        'standardPrice': double.parse(_standardPriceController.text),
-        'vipPrice': double.parse(_vipPriceController.text),
-        'standardTickets': int.parse(_standardTicketsController.text),
-        'vipTickets': int.parse(_vipTicketsController.text),
         'isPublished': _isPublished,
-        'questions': {
-          'question1': _question1Controller.text,
-          'question2': _question2Controller.text,
-        },
+        'tickets': _ticketControllers.map((ticket) {
+          return {
+            'type': ticket['ticketType']!.text,
+            'price': double.parse(ticket['ticketPrice']!.text),
+            'quantity': int.parse(ticket['ticketQuantity']!.text),
+          };
+        }).toList(),
       };
 
       try {
@@ -158,6 +198,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         controller: _startDateController,
                         decoration: InputDecoration(labelText: 'Start Date'),
                         validator: (value) => value!.isEmpty ? 'Start date is required' : null,
+                        onTap: () => _selectDateTime(context, _startDateController),
                       ),
                     ),
                     SizedBox(width: 10),
@@ -166,6 +207,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         controller: _endDateController,
                         decoration: InputDecoration(labelText: 'End Date'),
                         validator: (value) => value!.isEmpty ? 'End date is required' : null,
+                        onTap: () => _selectDateTime(context, _endDateController),
                       ),
                     ),
                   ],
@@ -179,6 +221,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         controller: _registrationStartController,
                         decoration: InputDecoration(labelText: 'Registration Start Date'),
                         validator: (value) => value!.isEmpty ? 'Registration start date is required' : null,
+                        onTap: () => _selectDateTime(context, _registrationStartController),
                       ),
                     ),
                     SizedBox(width: 10),
@@ -187,51 +230,44 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         controller: _registrationEndController,
                         decoration: InputDecoration(labelText: 'Registration End Date'),
                         validator: (value) => value!.isEmpty ? 'Registration end date is required' : null,
+                        onTap: () => _selectDateTime(context, _registrationEndController),
                       ),
                     ),
                   ],
                 ),
                 SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _standardPriceController,
-                        decoration: InputDecoration(labelText: 'Standard Ticket Price'),
-                        validator: (value) => value!.isEmpty ? 'Price is required' : null,
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _vipPriceController,
-                        decoration: InputDecoration(labelText: 'VIP Ticket Price'),
-                        validator: (value) => value!.isEmpty ? 'Price is required' : null,
-                      ),
-                    ),
-                  ],
+                // Add new ticket type section
+                ElevatedButton(
+                  onPressed: _addTicketType,
+                  child: Text('Add New Ticket Type'),
                 ),
                 SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _standardTicketsController,
-                        decoration: InputDecoration(labelText: 'Standard Tickets'),
-                        keyboardType: TextInputType.number,
-                        validator: (value) => value!.isEmpty ? 'Number of tickets is required' : null,
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _vipTicketsController,
-                        decoration: InputDecoration(labelText: 'VIP Tickets'),
-                        keyboardType: TextInputType.number,
-                        validator: (value) => value!.isEmpty ? 'Number of tickets is required' : null,
-                      ),
-                    ),
-                  ],
+                // Ticket types list
+                Column(
+                  children: List.generate(_ticketControllers.length, (index) {
+                    final ticket = _ticketControllers[index];
+                    return Column(
+                      children: [
+                        TextFormField(
+                          controller: ticket['ticketType'],
+                          decoration: InputDecoration(labelText: 'Ticket Type ${index + 1}'),
+                          validator: (value) => value!.isEmpty ? 'Ticket type is required' : null,
+                        ),
+                        TextFormField(
+                          controller: ticket['ticketPrice'],
+                          decoration: InputDecoration(labelText: 'Ticket Price ${index + 1}'),
+                          keyboardType: TextInputType.number,
+                          validator: (value) => value!.isEmpty ? 'Ticket price is required' : null,
+                        ),
+                        TextFormField(
+                          controller: ticket['ticketQuantity'],
+                          decoration: InputDecoration(labelText: 'Ticket Quantity ${index + 1}'),
+                          keyboardType: TextInputType.number,
+                          validator: (value) => value!.isEmpty ? 'Ticket quantity is required' : null,
+                        ),
+                      ],
+                    );
+                  }),
                 ),
                 SizedBox(height: 10),
                 ElevatedButton(
