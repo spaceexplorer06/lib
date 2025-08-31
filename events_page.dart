@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:eventshive/attendee_details.dart';
 import 'package:eventshive/attendee_home_page.dart';
+import 'package:eventshive/profile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'event_creation.dart';
@@ -13,7 +16,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List<dynamic> events = [];
+  List<dynamic> filteredEvents = [];
   bool isLoading = true;
+  bool isSearching = false;
+  TextEditingController searchController = TextEditingController();
 
   final String backendBaseUrl = "http://10.53.1.81:3000";
 
@@ -32,6 +38,7 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         setState(() {
           events = jsonDecode(response.body);
+          filteredEvents = events; // initially all events
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -56,8 +63,8 @@ class _HomePageState extends State<HomePage> {
       String? token = prefs.getString('auth_token');
 
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('❌ You are not logged in')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('❌ You are not logged in')));
         setState(() => isLoading = false);
         return;
       }
@@ -70,12 +77,10 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
-      print('Delete Status: ${response.statusCode}');
-      print('Delete Response: ${response.body}');
-
       if (response.statusCode == 200) {
         setState(() {
           events.removeWhere((event) => event['_id'] == eventId);
+          filteredEvents.removeWhere((event) => event['_id'] == eventId);
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('✅ Event deleted successfully')),
@@ -83,7 +88,9 @@ class _HomePageState extends State<HomePage> {
       } else {
         final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Failed to delete event: ${data['message'] ?? 'Unknown error'}')),
+          SnackBar(
+              content: Text(
+                  '❌ Failed to delete event: ${data['message'] ?? 'Unknown error'}')),
         );
       }
     } catch (e) {
@@ -96,12 +103,49 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void filterEvents(String query) {
+    final results = events.where((event) {
+      final name = event['name']?.toLowerCase() ?? '';
+      final location = event['location']?.toLowerCase() ?? '';
+      final search = query.toLowerCase();
+      return name.contains(search) || location.contains(search);
+    }).toList();
+
+    setState(() {
+      filteredEvents = results;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('EventHive - Organizer'),
+        title: !isSearching
+            ? const Text('EventHive - Organizer')
+            : TextField(
+                controller: searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search events...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.white60),
+                ),
+                style: const TextStyle(color: Color.fromARGB(255, 57, 1, 103), fontSize: 18),
+                onChanged: filterEvents,
+              ),
         actions: [
+          IconButton(
+            icon: Icon(isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                if (isSearching) {
+                  searchController.clear();
+                  filteredEvents = events;
+                }
+                isSearching = !isSearching;
+              });
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'attendee') {
@@ -112,12 +156,12 @@ class _HomePageState extends State<HomePage> {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'attendee',
                 child: Text('Switch to Attendee Home'),
               ),
             ],
-            icon: Icon(Icons.menu),
+            icon: const Icon(Icons.menu),
           ),
         ],
       ),
@@ -138,31 +182,24 @@ class _HomePageState extends State<HomePage> {
                       if (value == true) fetchEvents();
                     });
                   },
-                  child: Text('Add New Event'),
-                ),
-                IconButton(
-                  icon: Icon(Icons.search),
-                  onPressed: () {},
+                  child: const Text('Add New Event'),
                 ),
               ],
             ),
 
-            // Loading spinner
             if (isLoading)
-              Expanded(child: Center(child: CircularProgressIndicator())),
+              const Expanded(child: Center(child: CircularProgressIndicator())),
 
-            // Event List
             if (!isLoading)
               Expanded(
-                child: events.isEmpty
-                    ? Center(child: Text('No events found'))
+                child: filteredEvents.isEmpty
+                    ? const Center(child: Text('No events found'))
                     : ListView.builder(
-                        itemCount: events.length,
+                        itemCount: filteredEvents.length,
                         itemBuilder: (context, index) {
-                          final event = events[index];
-
+                          final event = filteredEvents[index];
                           return Card(
-                            margin: EdgeInsets.symmetric(vertical: 8),
+                            margin: const EdgeInsets.symmetric(vertical: 8),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             elevation: 3,
@@ -175,16 +212,18 @@ class _HomePageState extends State<HomePage> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) =>
-                                              EventDetailPage(eventId: event['_id']),
+                                          builder: (_) => EventDetailPage(
+                                              eventId: event['_id']),
                                         ),
                                       );
                                     },
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                           child: Image.network(
                                             event['imageUrl'] ?? '',
                                             width: 80,
@@ -201,45 +240,53 @@ class _HomePageState extends State<HomePage> {
                                             },
                                           ),
                                         ),
-                                        SizedBox(width: 12),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 event['name'] ?? "No Title",
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
-                                              SizedBox(height: 4),
+                                              const SizedBox(height: 4),
                                               Text(
-                                                event['description'] ?? "No Description",
+                                                event['description'] ??
+                                                    "No Description",
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
-                                              SizedBox(height: 6),
+                                              const SizedBox(height: 6),
                                               Row(
                                                 children: [
-                                                  Icon(Icons.location_on,
-                                                      size: 16, color: Colors.red),
-                                                  SizedBox(width: 4),
+                                                  const Icon(Icons.location_on,
+                                                      size: 16,
+                                                      color: Colors.red),
+                                                  const SizedBox(width: 4),
                                                   Expanded(
                                                     child: Text(
-                                                      event['location'] ?? "Unknown",
-                                                      overflow: TextOverflow.ellipsis,
+                                                      event['location'] ??
+                                                          "Unknown",
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
                                                   ),
-                                                  SizedBox(width: 8),
-                                                  Icon(Icons.calendar_today,
-                                                      size: 16, color: Colors.blue),
-                                                  SizedBox(width: 4),
+                                                  const SizedBox(width: 8),
+                                                  const Icon(Icons.calendar_today,
+                                                      size: 16,
+                                                      color: Colors.blue),
+                                                  const SizedBox(width: 4),
                                                   Expanded(
                                                     child: Text(
-                                                      event['startDate'] ?? "N/A",
-                                                      overflow: TextOverflow.ellipsis,
+                                                      event['startDate'] ??
+                                                          "N/A",
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                 ],
@@ -263,26 +310,27 @@ class _HomePageState extends State<HomePage> {
                                   bottom: 8,
                                   right: 8,
                                   child: IconButton(
-                                    icon: Icon(Icons.delete, color: Colors.red),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
                                     onPressed: () {
                                       showDialog(
                                         context: context,
                                         builder: (_) => AlertDialog(
-                                          title: Text('Confirm Delete'),
-                                          content: Text(
+                                          title: const Text('Confirm Delete'),
+                                          content: const Text(
                                               'Are you sure you want to delete this event?'),
                                           actions: [
                                             TextButton(
                                               onPressed: () =>
                                                   Navigator.pop(context),
-                                              child: Text('Cancel'),
+                                              child: const Text('Cancel'),
                                             ),
                                             TextButton(
                                               onPressed: () {
                                                 deleteEvent(event['_id']);
                                                 Navigator.pop(context);
                                               },
-                                              child: Text('Delete',
+                                              child: const Text('Delete',
                                                   style: TextStyle(
                                                       color: Colors.red)),
                                             ),
@@ -300,6 +348,39 @@ class _HomePageState extends State<HomePage> {
               ),
           ],
         ),
+      ),
+      floatingActionButton: SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        overlayOpacity: 0.4,
+        spacing: 10,
+        spaceBetweenChildren: 10,
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.person),
+            label: 'Profile',
+            backgroundColor: Colors.blue,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => OrganizerProfile()),
+              );
+            },
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.list),
+            label: 'Attendee List',
+            backgroundColor: Colors.green,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AttendeesPage()),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

@@ -1,35 +1,66 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_page.dart'; // make sure this is the correct import
 
-class AttendeeProfilePage extends StatelessWidget {
-  // Replace these with actual user data from backend or shared preferences
-  final String name = "John Doe";
-  final String email = "johndoe@example.com";
-  final String profileImageUrl =
+class AttendeeProfilePage extends StatefulWidget {
+  const AttendeeProfilePage({Key? key}) : super(key: key);
+
+  @override
+  _AttendeeProfilePageState createState() => _AttendeeProfilePageState();
+}
+
+class _AttendeeProfilePageState extends State<AttendeeProfilePage> {
+  String? name;
+  String? email;
+  String profileImageUrl =
       "https://www.w3schools.com/w3images/avatar2.png"; // placeholder
+  int totalTicketsBooked = 5; // example statistic
 
-  final int totalTicketsBooked = 5; // example statistic
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
-  void _logout(BuildContext context) {
-    // Clear session, shared preferences, or token here
-    // Then navigate to login page
-    Navigator.pushReplacementNamed(context, '/login');
+  Future<void> _loadProfile() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      name = prefs.getString('user_name') ?? 'Attendee Name';
+      email = prefs.getString('user_email') ?? 'email@example.com';
+      // If you also store profile URL during registration/login
+      if (prefs.getString('user_profile_url') != null) {
+        profileImageUrl = prefs.getString('user_profile_url')!;
+      }
+    });
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Clears all stored session data
+
+    // Navigate to login page and remove all previous routes
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => LoginPage()),
+      (route) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Profile'),
+        title: const Text('My Profile'),
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
-            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            tooltip: "Logout",
             onPressed: () => _logout(context),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             // Profile Picture
@@ -37,47 +68,49 @@ class AttendeeProfilePage extends StatelessWidget {
               radius: 60,
               backgroundImage: NetworkImage(profileImageUrl),
               onBackgroundImageError: (_, __) =>
-                  AssetImage('assets/images/placeholder.jpg') as ImageProvider,
+                  const AssetImage('assets/images/placeholder.jpg')
+                      as ImageProvider,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
 
             // Name
             Text(
-              name,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              name ?? 'Attendee Name',
+              style:
+                  const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
 
             // Email
             Text(
-              email,
+              email ?? 'email@example.com',
               style: TextStyle(fontSize: 16, color: Colors.grey[700]),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-            Divider(),
+            const Divider(),
 
             // Stats
             ListTile(
-              leading: Icon(Icons.confirmation_num),
-              title: Text('Total Tickets Booked'),
+              leading: const Icon(Icons.confirmation_num),
+              title: const Text('Total Tickets Booked'),
               trailing: Text('$totalTicketsBooked'),
             ),
-            ListTile(
+            const ListTile(
               leading: Icon(Icons.event),
               title: Text('Events Participated'),
               trailing: Text('3'), // example
             ),
 
-            Divider(),
+            const Divider(),
 
             // Edit Profile Button
             ElevatedButton.icon(
               onPressed: () {
                 // Navigate to edit profile page (if implemented)
               },
-              icon: Icon(Icons.edit),
-              label: Text('Edit Profile'),
+              icon: const Icon(Icons.edit),
+              label: const Text('Edit Profile'),
             ),
           ],
         ),

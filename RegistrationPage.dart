@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:eventshive/events_page.dart'; // Make sure this is the correct class name
+import 'package:eventshive/events_page.dart'; // Update if needed
 
 class RegistrationPage extends StatefulWidget {
   @override
@@ -32,7 +32,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
 
     try {
-      // Register API call
       final response = await http.post(
         Uri.parse('$backendBaseUrl/register'),
         headers: {'Content-Type': 'application/json'},
@@ -42,10 +41,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(data['message'] ?? "Registered successfully")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? "Registered successfully")),
+        );
 
-        // Auto-login after successful registration
+        // Save organizer info locally
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('organizer_name', name);
+        await prefs.setString('organizer_email', email);
+
+        if (data['user'] != null && data['user']['profileUrl'] != null) {
+          await prefs.setString('organizer_profile_url', data['user']['profileUrl']);
+        }
+
+        // Auto-login
         await autoLogin(email, password);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -74,12 +83,24 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (response.statusCode == 200 && data['token'] != null) {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', data['token']);
-        await prefs.setString('user_email', data['user']['email']);
 
-        // Navigate to EventsPage
+        // Save name/email again from login response if available
+        if (data['user'] != null) {
+          if (data['user']['name'] != null) {
+            await prefs.setString('organizer_name', data['user']['name']);
+          }
+          if (data['user']['email'] != null) {
+            await prefs.setString('organizer_email', data['user']['email']);
+          }
+          if (data['user']['profileUrl'] != null) {
+            await prefs.setString('organizer_profile_url', data['user']['profileUrl']);
+          }
+        }
+
+        // Navigate to HomePage
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomePage()), // Make sure class name matches
+          MaterialPageRoute(builder: (_) => HomePage()),
         );
       } else {
         ScaffoldMessenger.of(context)
@@ -97,7 +118,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -107,7 +127,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
               ),
             ),
           ),
-          // Registration card
           Center(
             child: SingleChildScrollView(
               child: Card(
@@ -176,7 +195,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               style: TextStyle(color: Colors.grey.shade700)),
                           GestureDetector(
                             onTap: () {
-                              Navigator.pop(context); // Go back to LoginPage
+                              Navigator.pop(context);
                             },
                             child: Text(
                               "Login",

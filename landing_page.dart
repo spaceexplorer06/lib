@@ -20,12 +20,7 @@ class LandingPage extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo
-                Image.asset(
-                  'assets/images/logo1.png', 
-                  height: 100,
-                  width: 100,
-                ),
+                
                 SizedBox(height: 20),
                 Text(
                   'Welcome to EventHive',
