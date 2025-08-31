@@ -80,19 +80,21 @@ class _RegisterPageState extends State<RegisterPage> {
           if (data['pdf'] != null) await _saveAndOpenPdf(data['pdf']);
           _showSnackBar('✅ Ticket booked successfully!');
         } else {
+          await _saveOfflineTicket();
           _showSnackBar(
               '⚠️ Could not confirm with server. Ticket saved locally.');
         }
       } else {
-        _showSnackBar(
-            '⚠️ Not logged in. Ticket will be saved locally.');
+        await _saveOfflineTicket();
+        _showSnackBar('⚠️ Not logged in. Ticket saved locally.');
       }
     } catch (e) {
       print('Error booking ticket: $e');
+      await _saveOfflineTicket();
       _showSnackBar('⚠️ Could not connect to server. Ticket saved locally.');
     } finally {
       setState(() => isLoading = false);
-      if (!backendSuccess) await _generateFancyPdf();
+      await _generateFancyPdf();
       Navigator.pop(context, ticketCount);
     }
   }
@@ -140,13 +142,37 @@ class _RegisterPageState extends State<RegisterPage> {
       final bytes = base64Decode(base64Pdf);
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file =
-          File('${directory.path}/ticket_${widget.eventId}_$timestamp.pdf');
+      final file = File('${directory.path}/ticket_${widget.eventId}_$timestamp.pdf');
+
       await file.writeAsBytes(bytes, flush: true);
       await OpenFile.open(file.path);
+      _showSnackBar("✅ PDF Ticket opened successfully!");
     } catch (e) {
       print('PDF error: $e');
       _showSnackBar('❌ Failed to open PDF');
+    }
+  }
+
+  Future<void> _saveOfflineTicket() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      List<String> offlineTickets = prefs.getStringList('offline_tickets') ?? [];
+
+      Map<String, dynamic> ticketData = {
+        'eventId': widget.eventId,
+        'eventName': widget.eventName,
+        'ticketType': widget.ticketType,
+        'ticketPrice': widget.ticketPrice,
+        'quantity': ticketCount,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      offlineTickets.add(jsonEncode(ticketData));
+      await prefs.setStringList('offline_tickets', offlineTickets);
+      _showSnackBar('✅ Ticket saved locally!');
+    } catch (e) {
+      print('Error saving offline ticket: $e');
+      _showSnackBar('❌ Failed to save ticket locally');
     }
   }
 
@@ -175,35 +201,26 @@ class _RegisterPageState extends State<RegisterPage> {
           build: (context) => pw.Container(
             padding: pw.EdgeInsets.all(20),
             decoration: pw.BoxDecoration(
-              border:
-                  pw.Border.all(color: PdfColor.fromInt(0xFF6200EE), width: 3),
+              border: pw.Border.all(color: PdfColor.fromInt(0xFF6200EE), width: 3),
               borderRadius: pw.BorderRadius.circular(12),
               color: PdfColor.fromInt(0xFFEDE7F6),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                pw.Text('🎟️ EVENT TICKET',
-                    style:
-                        pw.TextStyle(fontSize: 28, color: PdfColor.fromInt(0xFF6200EE))),
+                pw.Text('🎟️ EVENT TICKET', style: pw.TextStyle(fontSize: 28, color: PdfColor.fromInt(0xFF6200EE))),
                 pw.SizedBox(height: 12),
                 pw.Divider(color: PdfColor.fromInt(0xFF6200EE), thickness: 2),
                 pw.SizedBox(height: 12),
-                pw.Text('Event: ${widget.eventName}',
-                    style: pw.TextStyle(fontSize: 20)),
-                pw.Text('Ticket Type: ${widget.ticketType}',
-                    style: pw.TextStyle(fontSize: 18)),
-                pw.Text('Quantity: $ticketCount',
-                    style: pw.TextStyle(fontSize: 18)),
-                pw.Text('Price per Ticket: ₹${widget.ticketPrice}',
-                    style: pw.TextStyle(fontSize: 18)),
-                pw.Text('Total: ₹${widget.ticketPrice * ticketCount}',
-                    style: pw.TextStyle(fontSize: 18)),
+                pw.Text('Event: ${widget.eventName}', style: pw.TextStyle(fontSize: 20)),
+                pw.Text('Ticket Type: ${widget.ticketType}', style: pw.TextStyle(fontSize: 18)),
+                pw.Text('Quantity: $ticketCount', style: pw.TextStyle(fontSize: 18)),
+                pw.Text('Price per Ticket: ₹${widget.ticketPrice}', style: pw.TextStyle(fontSize: 18)),
+                pw.Text('Total: ₹${widget.ticketPrice * ticketCount}', style: pw.TextStyle(fontSize: 18)),
                 pw.SizedBox(height: 20),
                 pw.Image(pw.MemoryImage(qrBytes), width: 120, height: 120),
                 pw.SizedBox(height: 10),
-                pw.Text('Show this QR code at the entrance',
-                    style: pw.TextStyle(fontSize: 14)),
+                pw.Text('Show this QR code at the entrance', style: pw.TextStyle(fontSize: 14)),
               ],
             ),
           ),
@@ -212,8 +229,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file =
-          File('${directory.path}/ticket_${widget.eventId}_$timestamp.pdf');
+      final file = File('${directory.path}/ticket_${widget.eventId}_$timestamp.pdf');
       await file.writeAsBytes(await pdf.save(), flush: true);
       await OpenFile.open(file.path);
     } catch (e) {
@@ -237,9 +253,7 @@ class _RegisterPageState extends State<RegisterPage> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Tickets Booking",
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text("Tickets Booking", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   SizedBox(height: 10),
                   Text("Select your tickets below:", style: TextStyle(fontSize: 16)),
                   SizedBox(height: 20),
@@ -252,23 +266,16 @@ class _RegisterPageState extends State<RegisterPage> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(widget.ticketType,
-                                  style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold)),
+                              Text(widget.ticketType, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                               Text('₹ ${widget.ticketPrice.toStringAsFixed(2)}'),
                               Text('Available: ${widget.availableQuantity}'),
                             ],
                           ),
                           Row(
                             children: [
-                              IconButton(
-                                  onPressed: () => updateTicketCount(false),
-                                  icon: Icon(Icons.remove)),
+                              IconButton(onPressed: () => updateTicketCount(false), icon: Icon(Icons.remove)),
                               Text(ticketCount.toString()),
-                              IconButton(
-                                  onPressed: () => updateTicketCount(true),
-                                  icon: Icon(Icons.add)),
+                              IconButton(onPressed: () => updateTicketCount(true), icon: Icon(Icons.add)),
                             ],
                           ),
                         ],

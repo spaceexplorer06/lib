@@ -13,7 +13,7 @@ class CreateEventPage extends StatefulWidget {
 class _CreateEventPageState extends State<CreateEventPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers for event fields
+  // Event controllers
   final TextEditingController _eventNameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
@@ -22,16 +22,30 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final TextEditingController _registrationStartController = TextEditingController();
   final TextEditingController _registrationEndController = TextEditingController();
 
-  // Dynamic tickets
+  // Tickets
   final List<Map<String, TextEditingController>> _ticketControllers = [];
 
   bool _isPublished = false;
   bool _isLoading = false;
 
-  // Replace with your backend IP
+  // Event type
+  String? _selectedEventType;
+  final List<String> _eventTypes = [
+    "Conference", "Trade Show", "Seminar", "Workshop", "Corporate Meeting",
+    "Product Launch", "Networking Event", "Business Summit", "Expo", "Convention",
+    "Festival", "Concert", "Performance", "Art Exhibition",
+    "Cultural Event", "Community Event", "Fundraiser", "Charity Gala", "Auction",
+    "Wedding", "Birthday Party", "Anniversary Celebration", "Graduation Ceremony",
+    "Baby Shower", "Bridal Shower", "Family Reunion", "Holiday Party", "Dinner Party",
+    "Banquet", "Sporting Event", "Marathon", "Tournament", "Team Building Event",
+    "Corporate Retreat", "Office Party", "Launch Party", "Pop-Up Event", "Webinar",
+    "Virtual Conference", "Hybrid Event", "Religious Ceremony", "Funeral Service",
+    "Memorial Service", "Political Rally", "Campaign Event", "Press Conference",
+    "Customer Appreciation Event", "Open House", "Training Session", "Hackathon"
+  ];
+
   final String backendBaseUrl = "http://10.53.1.81:3000";
 
-  // Add new ticket
   void _addTicketType() {
     setState(() {
       _ticketControllers.add({
@@ -42,7 +56,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     });
   }
 
-  // Date picker
   Future<void> _pickDate(TextEditingController controller) async {
     DateTime? picked = await showDatePicker(
       context: context,
@@ -55,9 +68,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  // Create event API call
   Future<void> createEvent() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedEventType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select an event type')));
+      return;
+    }
+
+    if (_ticketControllers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add at least one ticket')));
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -78,6 +102,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       'endDate': _endDateController.text.trim(),
       'registrationStart': _registrationStartController.text.trim(),
       'registrationEnd': _registrationEndController.text.trim(),
+      'eventType': _selectedEventType,
       'isPublished': _isPublished,
       'tickets': _ticketControllers.map((ticket) {
         return {
@@ -93,7 +118,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         Uri.parse('$backendBaseUrl/create-event'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // ⚡ JWT header
+          'Authorization': 'Bearer $token',
         },
         body: jsonEncode(eventData),
       );
@@ -104,9 +129,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? "Event created successfully!")),
         );
-        Navigator.pop(context, true); // Go back and refresh homepage
-      } else if (response.statusCode == 401) {
-        _showDialog("Unauthorized", "Session expired or invalid token. Please login again.");
+        Navigator.pop(context, true);
       } else {
         _showDialog("Error", data['error'] ?? "Failed to create event. Code: ${response.statusCode}");
       }
@@ -125,7 +148,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("OK")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK")),
         ],
       ),
     );
@@ -143,38 +166,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Event Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-
                 _buildTextField('Event Name', _eventNameController),
                 const SizedBox(height: 10),
                 _buildTextField('Description', _descriptionController),
                 const SizedBox(height: 10),
                 _buildTextField('Location', _locationController),
                 const SizedBox(height: 10),
-
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildDateField('Start Date', _startDateController),
-                    ),
+                    Expanded(child: _buildDateField('Start Date', _startDateController)),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildDateField('End Date', _endDateController),
-                    ),
+                    Expanded(child: _buildDateField('End Date', _endDateController)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildDateField('Registration Start', _registrationStartController),
-                    ),
+                    Expanded(child: _buildDateField('Registration Start', _registrationStartController)),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildDateField('Registration End', _registrationEndController),
-                    ),
+                    Expanded(child: _buildDateField('Registration End', _registrationEndController)),
                   ],
+                ),
+                const SizedBox(height: 10),
+
+                // Event Type
+                DropdownButtonFormField<String>(
+                  value: _selectedEventType,
+                  items: _eventTypes.map((type) {
+                    return DropdownMenuItem(value: type, child: Text(type));
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedEventType = val),
+                  decoration: InputDecoration(
+                    labelText: 'Event Type',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (value) => value == null || value.isEmpty ? 'Please select event type' : null,
                 ),
                 const SizedBox(height: 20),
 
@@ -218,6 +244,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                   ],
                 ),
                 const SizedBox(height: 20),
+
                 Center(
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : createEvent,

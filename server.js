@@ -5,8 +5,6 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const PDFDocument = require("pdfkit");
-const fs = require("fs");
-const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -21,14 +19,11 @@ app.use(express.json());
 const MONGO_URI =
   process.env.MONGO_URI ||
   "mongodb+srv://eventadmin:moinakdey17@cluster0.dtvoi.mongodb.net/eventhive?retryWrites=true&w=majority";
+
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
-
-// Ensure tickets folder exists
-const ticketsDir = path.join(__dirname, "tickets");
-if (!fs.existsSync(ticketsDir)) fs.mkdirSync(ticketsDir);
 
 // ======================= Schemas =======================
 
@@ -38,19 +33,19 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
 });
-
 const User = mongoose.model("User", userSchema);
 
 // Event Schema
 const eventSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  description: String,
-  location: String,
-  startDate: String,
-  endDate: String,
-  registrationStart: String,
-  registrationEnd: String,
+  description: { type: String, default: "No description provided" },
+  location: { type: String, default: "Not specified" },
+  startDate: { type: String, default: "TBD" },
+  endDate: { type: String, default: "TBD" },
+  registrationStart: { type: String, default: "" },
+  registrationEnd: { type: String, default: "" },
   isPublished: { type: Boolean, default: false },
+  eventType: { type: String, required: true }, // Added eventType
   tickets: [
     {
       type: { type: String, required: true },
@@ -59,7 +54,6 @@ const eventSchema = new mongoose.Schema({
     },
   ],
 });
-
 const Event = mongoose.model("Event", eventSchema);
 
 // ======================= Auth Middleware =======================
@@ -117,11 +111,18 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// Create Event (protected)
+// Create Event
 app.post("/create-event", authenticate, async (req, res) => {
   try {
-    const event = new Event(req.body);
+    const { name, description, location, startDate, endDate, registrationStart, registrationEnd, tickets, eventType } = req.body;
+
+    if (!eventType) {
+      return res.status(400).json({ success: false, message: "Event type is required" });
+    }
+
+    const event = new Event({ name, description, location, startDate, endDate, registrationStart, registrationEnd, tickets, eventType });
     await event.save();
+
     res.status(201).json({ success: true, message: "Event created successfully!", event });
   } catch (err) {
     console.error("Error creating event:", err.message);
@@ -152,7 +153,7 @@ app.get("/events/:id", async (req, res) => {
   }
 });
 
-// Delete event (protected)
+// Delete event
 app.delete("/events/:id", authenticate, async (req, res) => {
   try {
     const deletedEvent = await Event.findByIdAndDelete(req.params.id);
@@ -164,14 +165,13 @@ app.delete("/events/:id", authenticate, async (req, res) => {
   }
 });
 
-// Book ticket & generate PDF (protected)
+// ======================= Book Ticket =======================
 app.post("/events/:id/book-ticket", authenticate, async (req, res) => {
   const eventId = req.params.id;
   const { type, quantity } = req.body;
 
-  if (!type || !quantity || quantity <= 0) {
+  if (!type || !quantity || quantity <= 0)
     return res.status(400).json({ success: false, message: "Ticket type and quantity are required" });
-  }
 
   try {
     const event = await Event.findById(eventId);
@@ -180,27 +180,25 @@ app.post("/events/:id/book-ticket", authenticate, async (req, res) => {
     const ticket = event.tickets.find(t => t.type.toLowerCase() === type.toLowerCase());
     if (!ticket) return res.status(404).json({ success: false, message: `Ticket type '${type}' not found` });
 
-    if (ticket.quantity < quantity) {
+    if (ticket.quantity < quantity)
       return res.status(400).json({ success: false, message: `Not enough tickets. Only ${ticket.quantity} left` });
-    }
 
     ticket.quantity -= quantity;
     await event.save();
 
-    // Generate PDF in memory and return as Base64
-    const pdfDoc = new PDFDocument();
+    // Generate PDF in memory
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
     let buffers = [];
-    pdfDoc.on("data", buffers.push.bind(buffers));
-    pdfDoc.on("end", () => {
-      const pdfData = Buffer.concat(buffers);
-      const pdfBase64 = pdfData.toString("base64");
-
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => {
+      const pdfBase64 = Buffer.concat(buffers).toString("base64");
       res.status(200).json({
         success: true,
         message: "Tickets booked successfully!",
         bookedTicket: {
           eventId: event._id,
           eventName: event.name,
+          eventType: event.eventType, // Include eventType
           ticketType: ticket.type,
           price: ticket.price,
           bookedQuantity: quantity,
@@ -210,17 +208,20 @@ app.post("/events/:id/book-ticket", authenticate, async (req, res) => {
       });
     });
 
-    pdfDoc.fontSize(20).text("🎫 Ticket Confirmation", { align: "center" });
-    pdfDoc.moveDown();
-    pdfDoc.fontSize(16).text(`Event: ${event.name}`);
-    pdfDoc.text(`Ticket Type: ${ticket.type}`);
-    pdfDoc.text(`Quantity: ${quantity}`);
-    pdfDoc.text(`Price per ticket: ₹${ticket.price}`);
-    pdfDoc.text(`Total Amount: ₹${ticket.price * quantity}`);
-    pdfDoc.text(`Location: ${event.location}`);
-    pdfDoc.text(`Event Date: ${event.startDate} - ${event.endDate}`);
-    pdfDoc.end();
+    doc.fontSize(22).text("🎫 Ticket Confirmation", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(16).text(`Event: ${event.name}`);
+    doc.text(`Event Type: ${event.eventType}`);
+    doc.text(`Ticket Type: ${ticket.type}`);
+    doc.text(`Quantity: ${quantity}`);
+    doc.text(`Price per ticket: ₹${ticket.price}`);
+    doc.text(`Total Amount: ₹${ticket.price * quantity}`);
+    doc.text(`Location: ${event.location}`);
+    doc.text(`Event Date: ${event.startDate} - ${event.endDate}`);
+    doc.moveDown();
+    doc.text("Show this ticket at the entrance.", { align: "center" });
 
+    doc.end();
   } catch (err) {
     console.error("Error booking ticket:", err);
     res.status(500).json({ success: false, message: "Failed to book ticket" });
@@ -228,7 +229,7 @@ app.post("/events/:id/book-ticket", authenticate, async (req, res) => {
 });
 
 // Root
-app.get("/", (req, res) => res.send("🎉 EventHive API is running fine!"));
+app.get("/", (req, res) => res.send("🎉 EventHive API is running!"));
 
 // Start server
 app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running at http://0.0.0.0:${PORT}`));
